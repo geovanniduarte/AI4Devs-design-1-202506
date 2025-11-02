@@ -188,3 +188,298 @@ erDiagram
 ```
 
 ## 4. Diseño Alto Nivel
+
+### Arquitectura de Microservicios para ATS online LTI
+
+**Descripción Detallada**
+
+Microservicios independientes con base de datos propia
+Cada microservicio tiene responsabilidad única, contiene la lógica relacionada y maneja su propia base de datos para evitar dependencias acopladas y escalar independientemente. Las bases de datos pueden ser SQL o NoSQL según el caso. Ejemplos: microservicio de Vacantes, Candidatos, Entrevistas, Usuarios, Notificaciones, Documentos.
+
+**Comunicación frontend-backend mediante REST API**
+
+* El frontend (web React y móviles iOS/Android) consumen APIs REST expuestas por un API Gateway.
+
+* El API Gateway gestiona autenticación, autorización, enrutamiento y balanceo de carga.
+
+**Proveedor Cloud: AWS**
+
+* Microservicios desplegados en contenedores con Kubernetes (EKS) o AWS Fargate para serverless.
+
+* Bases de datos independientes con servicios gestionados (RDS para SQL, DynamoDB para NoSQL).
+
+* API Gateway de AWS para gestionar APIs REST.
+
+* Capa de Load balancing con AWS Application Load Balancer (ALB).
+
+* CDN para frontend estático (React y recursos móviles) usando AWS CloudFront.
+
+* Almacenamiento de documentos con Amazon S3.
+
+* Autenticación y autorización gestionadas por AWS Cognito (acceso móvil y web).
+
+* Logs centralizados con AWS CloudWatch y monitoreo con AWS X-Ray.
+
+**Frontend Web**
+
+React para UI, desplegado en S3 (como sitio estático) con CloudFront.
+
+Comunicación con backend vía REST API protegida por OAuth 2.0 mediante Cognito.
+
+**Frontend Móvil**
+
+Aplicaciones nativas iOS (Swift) y Android (Kotlin).
+
+Comunicación API REST con backend con librerías estándar para autenticación (Cognito SDK).
+
+**Seguridad**
+
+Autenticación centralizada con AWS Cognito.
+
+Comunicación cifrada (HTTPS/TLS).
+
+Políticas IAM estrictas en AWS para acceso a recursos.
+
+Escalabilidad y alta disponibilidad
+
+Auto escalado en EKS/Fargate.
+
+ALB distribuye tráfico entre réplicas.
+
+CDN con edge locations global para baja latencia.
+
+### Technologies Table
+
+| Component               | Technology / Language         |
+| ----------------------- | ----------------------------- |
+| Backend Microservices   | Node.js (Express.js)          |
+| Database                | AWS RDS (PostgreSQL)          |
+| Authentication          | AWS Cognito                   |
+| Messaging/Queue         | AWS SQS                       |
+| Notification System     | AWS SNS                       |
+| API Gateway             | AWS API Gateway               |
+| Container Orchestration | AWS ECS (Fargate)             |
+| Web Frontend            | React.js                      |
+| Mobile Frontend         | Swift (iOS), Kotlin (Android) |
+| CDN                     | AWS CloudFront                |
+
+### Diagram
+
+```mermaid
+graph TD
+    subgraph Frontend
+        ReactApp[React Web App]
+        MobileApps[Mobile Apps iOS/Android]
+    end
+
+    subgraph AWS-Cloud
+        APIGW[AWS API Gateway]
+        ALB[AWS Application Load Balancer]
+        subgraph Microservicios
+            VacanteSvc[Vacante Service]
+            CandidatoSvc[Candidato Service]
+            EntrevistaSvc[Entrevista Service]
+            UsuarioSvc[Usuario Service]
+            NotificacionSvc[Notificación Service]
+            DocumentoSvc[Documento Service]
+            IAFilterSvc[Agente IA de Filtrado y Ranking]
+        end
+
+        subgraph BasesDeDatos
+            RDS[(RDS SQL DB)]
+            DynamoDB[(DynamoDB NoSQL)]
+            S3[(Amazon S3 Storage)]
+        end
+
+        Cognito[AWS Cognito]
+        CloudFront[AWS CloudFront CDN]
+        CloudWatch[AWS CloudWatch]
+    end
+
+    ReactApp -->|REST API / OAuth2| CloudFront
+    MobileApps -->|REST API / OAuth2| Cognito
+
+    CloudFront --> APIGW
+    APIGW --> ALB
+    ALB --> VacanteSvc
+    ALB --> CandidatoSvc
+    ALB --> EntrevistaSvc
+    ALB --> UsuarioSvc
+    ALB --> NotificacionSvc
+    ALB --> DocumentoSvc
+    ALB --> IAFilterSvc
+
+    VacanteSvc --> RDS
+    CandidatoSvc --> RDS
+    EntrevistaSvc --> RDS
+    UsuarioSvc --> RDS
+    NotificacionSvc --> DynamoDB
+    DocumentoSvc --> S3
+    IAFilterSvc --> RDS
+
+    APIGW --> Cognito
+    Microservicios -->|Logs/Metrics| CloudWatch
+
+```
+
+## 5. Diagrama C4
+
+### Context
+```mermaid
+graph TD
+    user[Usuario Reclutador / Candidato]
+    mobileApp[Aplicación móvil iOS/Android]
+    webApp[Aplicación web React]
+
+    LTI[ATS LTI Sistema]
+
+    user --> mobileApp
+    user --> webApp
+
+    mobileApp --> LTI
+    webApp --> LTI
+
+    otherSystems[Otros Sistemas Externos (Correo, Redes Sociales, Servicios de Pago)]
+    LTI -.-> otherSystems
+```
+
+### Containers
+
+```mermaid
+graph TB
+    mobileApp[Aplicación móvil iOS/Android]
+    webApp[Aplicación web React]
+
+    apiGateway[AWS API Gateway]
+    alb[AWS Application Load Balancer]
+
+    subgraph Microservicios
+        vacanteSvc[Servicio Vacante]
+        candidatoSvc[Servicio Candidato]
+        entrevistaSvc[Servicio Entrevista]
+        usuarioSvc[Servicio Usuario]
+        notificacionSvc[Servicio Notificación]
+        documentoSvc[Servicio Documento]
+        iaFilterSvc[Agente IA Filtrado y Ranking]
+    end
+
+    user[Usuario]
+
+    user --> mobileApp
+    user --> webApp
+    mobileApp --> apiGateway
+    webApp --> apiGateway
+
+    apiGateway --> alb
+    alb --> vacanteSvc
+    alb --> candidatoSvc
+    alb --> entrevistaSvc
+    alb --> usuarioSvc
+    alb --> notificacionSvc
+    alb --> documentoSvc
+    alb --> iaFilterSvc
+
+```
+
+### Components, Servicio Vacante
+
+```mermaid
+graph LR
+    vacanteSvc[Servicio Vacante]
+
+    subgraph Componentes del Servicio Vacante
+        jobManager[Gestor de Vacantes]
+        publicationManager[Gestor de Publicación]
+        requirementsManager[Gestor de Requisitos]
+        analyticsModule[Módulo de Analíticas]
+        notificationModule[Módulo de Notificaciones]
+        integrationAPI[API de Integración Externa]
+    end
+
+    vacanteSvc --> jobManager
+    vacanteSvc --> publicationManager
+    vacanteSvc --> requirementsManager
+    vacanteSvc --> analyticsModule
+    vacanteSvc --> notificationModule
+    vacanteSvc --> integrationAPI
+
+    jobManager --> publicationManager
+    jobManager --> requirementsManager
+    publicationManager --> integrationAPI
+    analyticsModule --> jobManager
+    notificationModule --> jobManager
+
+```
+
+Descripción de componentes
+
+* Gestor de Vacantes: Crea, edita y elimina vacantes. Mantiene las propiedades base (título, descripción, estado).
+
+* Gestor de Publicación: Controla la publicación de vacantes en múltiples canales externos (portales, redes sociales).
+
+* Gestor de Requisitos: Administra requisitos necesarios para cada vacante (habilidades, experiencia).
+
+* Módulo de Analíticas: Proporciona métricas sobre vacantes como visitas, aplicaciones recibidas y tiempo activo.
+
+* Módulo de Notificaciones: Gestiona envío de notificaciones relacionadas con la vacante (nuevas aplicaciones, recordatorios).
+
+* API de Integración Externa: Facilita la comunicación con servicios externos para publicación y sincronización.
+
+### Code, Gestor de Vacantes.
+
+```mermaid
+classDiagram
+    class JobManager {
+        +createJob(data)
+        +getJobById(id)
+        +updateJob(id, data)
+        +deleteJob(id)
+        +listJobs(filter)
+    }
+
+    class Job {
+        +id: string
+        +title: string
+        +description: string
+        +requirements: string[]
+        +status: string
+        +publicationChannels: string[]
+        +createdAt: datetime
+        +updatedAt: datetime
+    }
+
+    class JobRepository {
+        +save(job: Job)
+        +findById(id: string) Job
+        +update(id: string, job: Job)
+        +delete(id: string)
+        +find(filter) Job[]
+    }
+
+    class JobService {
+        +validateJobData(data)
+        +notifyPublication(job: Job)
+    }
+
+    JobManager "1" o-- "*" Job : manages >
+    JobManager "1" o-- "1" JobRepository : uses >
+    JobManager "1" o-- "1" JobService : uses >
+```mermaid
+
+Explicación del diagrama para Product Owner
+
+* JobManager: Es la clase central que provee las funciones para crear, listar, editar, y eliminar vacantes. Es la interfaz que usa el resto del sistema para manipular el recurso "Vacante".
+
+* Job: Representa el modelo de datos para una vacante, con todos sus atributos, como título, requisitos, estado, y canales donde será publicada.
+
+* JobRepository: Se encarga de la persistencia, es decir, guardar, buscar, modificar y borrar los datos de las vacantes en la base de datos (en nuestro caso PostgreSQL en AWS RDS).
+
+* JobService: Contiene lógicas auxiliares, como la validación de datos y la notificación para cuando una vacante se publica. Es una capa que ayuda a mantener el código organizado y modular.
+
+
+
+
+
+
+
+
